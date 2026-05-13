@@ -25,7 +25,7 @@ Together with `Tamp.Cargo` + `Tamp.Tauri.V2` + `Tamp.Msix`, the entire "Rust app
 dotnet add package Tamp.MicrosoftStoreCli
 ```
 
-Multi-targets net8 / net9 / net10. Requires `Tamp.Core` ≥ **1.5.1** (for the `InternalsVisibleTo` grant that lets the wrapper handle `Secret`-typed cert/client passwords).
+Multi-targets net8 / net9 / net10. Requires `Tamp.Core` ≥ **1.5.1**. (1.5.1 originally granted `InternalsVisibleTo` for `Secret.Reveal()`; as of Tamp.Core **1.6.0** the IVT grant was made redundant by making `Reveal()` public + TAMP004-gated. Existing 1.5.1 dependency continues working unchanged.)
 
 ## Tool installation
 
@@ -173,7 +173,7 @@ Run `dotnet tamp PublishToStore --version 1.0.6 --rolloutPercent 25` and the ent
 
 `Reconfigure` accepts `Secret`-typed `ClientSecret` and `CertificatePassword`. Internally these are revealed at command-line emission time and the values are listed in the `CommandPlan.Secrets` collection so Tamp's process trace masks them in printed output. Same shape as `Tamp.AzureCli.V2`'s access-token handling.
 
-`Tamp.MicrosoftStoreCli` is on `Tamp.Core`'s `InternalsVisibleTo` list as of Tamp.Core 1.5.1 — the wrapper depends on that minimum version for `Secret.Reveal()` access.
+`Tamp.MicrosoftStoreCli` was added to `Tamp.Core`'s `InternalsVisibleTo` list in 1.5.1 — but as of Tamp.Core **1.6.0** the IVT gate was retired in favor of the [TAMP004 analyzer](https://github.com/tamp-build/tamp/wiki/Tamp-Analyzers#tamp004). The wrapper's `*Settings` classes naturally fall under TAMP004's approved-context heuristic, so no special access grant is required for newer Tamp.Core versions. The 1.5.1 minimum dependency stays for back-compat.
 
 ## Mutually-exclusive option enforcement
 
