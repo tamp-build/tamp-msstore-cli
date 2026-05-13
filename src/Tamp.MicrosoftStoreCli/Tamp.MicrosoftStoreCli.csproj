@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Tamp.MicrosoftStoreCli</RootNamespace>
+    <AssemblyName>Tamp.MicrosoftStoreCli</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Tamp.MicrosoftStoreCli</PackageId>
+    <Description>Wrapper for the Microsoft Store Developer CLI (msstore-cli). Automates Microsoft Store / Partner Center submissions: publish an MSIX as an upgrade, control gradual rollout, manage flight rings, poll submission status. Removes the manual Partner Center web-UI submission step. Pairs with Tamp.Msix as the final stage of the Rust-app-to-Microsoft-Store ship chain.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(TampCorePath)" Condition="'$(TampCoreMode)' == 'project'" />
+    <PackageReference Include="Tamp.Core" Condition="'$(TampCoreMode)' == 'package'" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
