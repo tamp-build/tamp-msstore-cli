@@ -31,11 +31,17 @@ Multi-targets net8 / net9 / net10. Requires `Tamp.Core` ≥ **1.5.1**. (1.5.1 or
 
 Install `msstore-cli` on each CI runner — distribution channels:
 
-- **Windows:** `winget install "Microsoft Store Developer CLI"`
+- **Windows:** **direct GitHub release zip** — `msstore-cli` is *not* on winget (confirmed against `microsoft/msstore-cli` v0.3.9 — the upstream publishes only release archives, no winget manifest). The one-liner DasBook adoption used:
+  ```powershell
+  $dest = "$env:LOCALAPPDATA\Programs\msstore-cli"
+  Invoke-WebRequest "https://github.com/microsoft/msstore-cli/releases/download/v0.3.9/MSStoreCLI-win-x64.zip" -OutFile "$env:TEMP\msstore.zip"
+  Expand-Archive "$env:TEMP\msstore.zip" -DestinationPath $dest
+  [Environment]::SetEnvironmentVariable("PATH", "$([Environment]::GetEnvironmentVariable('PATH','User'));$dest", "User")
+  ```
 - **macOS:** `brew install microsoft/msstore-cli/msstore-cli` or `.tar.gz` from [releases](https://github.com/microsoft/msstore-cli/releases)
 - **Linux:** `brew install microsoft/msstore-cli/msstore-cli` or `.tar.gz`
 
-> **Pin the version.** msstore-cli is officially labeled "(preview)" and the verb surface can shift between minor versions. Use `winget install --version <x.y.z>` / `brew install msstore-cli@<x.y.z>` in CI rather than tracking latest. Tamp.MicrosoftStoreCli 0.1.0 is built against the msstore-cli `0.3.9` (January 2026) verb shape.
+> **Pin the version.** msstore-cli is officially labeled "(preview)" and the verb surface can shift between minor versions. Pin the GitHub release tag (`v0.3.9` shown above) on Windows; use `brew install msstore-cli@<x.y.z>` on macOS / Linux. CI runners should download a fixed release tag rather than `latest`. Tamp.MicrosoftStoreCli 0.1.0 is built against the msstore-cli `0.3.9` (January 2026) verb shape.
 
 ## Quick start — full DasBook-style ship pipeline
 
@@ -54,7 +60,7 @@ class Build : TampBuild
     [Parameter] readonly string ProductId = "9P53PC5S0PHJ";  // your Partner Center app ID
     [Parameter] readonly int RolloutPercent = 25;            // 25% gradual rollout to start
 
-    [FromPath("cargo")]    readonly Tool Cargo = null!;
+    [FromPath("cargo")] readonly Tool CargoBin = null!;
     [FromPath("makeappx")] readonly Tool MakeAppx = null!;
     [FromPath("msstore")]  readonly Tool MsStoreCli = null!;
     [FromNodeModules("tauri")] readonly Tool TauriCli = null!;
@@ -82,7 +88,7 @@ class Build : TampBuild
         .Executes(() => Msix.SetAppxManifestVersion(AppxManifest, Version));
 
     Target BuildService => _ => _
-        .Executes(() => Cargo.Build(s => s
+        .Executes(() => Cargo.Build(CargoBin, s => s
             .SetWorkingDirectory(ServiceCrate)
             .SetRelease().SetTarget(TargetTriple).SetLocked()));
 
@@ -92,7 +98,7 @@ class Build : TampBuild
         {
             var built = ServiceCrate / "target" / TargetTriple / "release" / "dasbook-service.exe";
             var sidecar = Tauri.ExternalBinPath(SrcTauri, "dasbook-service", TargetTriple);
-            sidecar.Parent!.CreateDirectory();
+            Directory.CreateDirectory(sidecar.Parent!.Value);
             File.Copy(built.Value, sidecar.Value, overwrite: true);
         });
 
@@ -109,7 +115,7 @@ class Build : TampBuild
 
     Target PackMsix => _ => _
         .DependsOn(nameof(StampVersion), nameof(StageDesktopExe))
-        .Executes(() => { Artifacts.CreateDirectory(); return Msix.Pack(MakeAppx, s => s
+        .Executes(() => { Directory.CreateDirectory(Artifacts.Value); return Msix.Pack(MakeAppx, s => s
             .SetSourceDirectory(StagingDir).SetOutputPackage(MsixOut)); });
 
     // ── The actual publish step. One Tamp target replaces the entire web-UI flow. ──
