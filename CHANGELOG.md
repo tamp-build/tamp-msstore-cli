@@ -5,6 +5,67 @@ All notable changes to **Tamp.MicrosoftStoreCli** are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — pending — `MsStore.EnsureInstalled` Windows auto-install (TAM-199)
+
+### Added
+
+- **`MsStore.EnsureInstalled(version?, installDir?, httpClient?)`** —
+  idempotent Windows installer for the msstore-cli binary. Downloads +
+  extracts the GitHub release zip when the binary isn't already present
+  at the requested version. Returns the resolved `AbsolutePath` to
+  `msstore.exe` for piping into `Tool.Create(...)` and onward to
+  `MsStore.Publish` / `MsStore.Reconfigure`.
+
+  ```csharp
+  // Wire it into the build script's tool-resolution step.
+  readonly Tool MsStoreCli = Tool.Create(MsStore.EnsureInstalled());
+
+  Target Publish => _ => _
+      .Executes(() => MsStore.Publish(MsStoreCli, s => s
+          .SetInputFile(MsixOut)
+          .SetAppId(ProductId)));
+  ```
+
+  Default version: **0.3.9** (the upstream version this satellite is tested
+  against — matches the README pin). Default install dir:
+  `%LOCALAPPDATA%\Programs\msstore-cli`. Both overridable.
+
+### Why
+
+DasBook canary friction batch #1 follow-up (2026-05-13). msstore-cli is
+NOT on winget; the upstream `microsoft/msstore-cli` publishes only
+release archives. Every Windows adopter was writing the same 4-line
+PowerShell snippet to install + add-to-PATH. Lifting that into a typed
+build-graph step makes version drift visible to CI and removes the
+hand-rolled bootstrap.
+
+### Platform support
+
+- **Windows** — full auto-install via GitHub release zip.
+- **macOS / Linux** — `PlatformNotSupportedException`. The recommended
+  install path on those platforms is
+  `brew install microsoft/msstore-cli/msstore-cli`, which Tamp does NOT
+  displace (per the build-chain-vs-build-tool creed — brew owns this use
+  case). On non-Windows, resolve via `[FromPath("msstore")]` after
+  brew-installing.
+
+### Idempotency
+
+A marker file `<installDir>/.tamp-msstore-version` records the installed
+version. Second call with the same version is a no-op (no network I/O,
+no extract). Changing the version forces a re-install (full wipe of the
+install dir then fresh extract — prevents stale executables shadowing
+the new version on PATH).
+
+### Tests
+
+19 new tests in `MsStoreInstallerTests` — happy path, URL shape, idempotency,
+version-change re-install, marker-missing re-download, HTTP-error wrapping
+with diagnostic message, missing-binary-in-zip detection, null/empty arg
+validation, default install dir under `LocalApplicationData`, stale-file
+cleanup. Uses an injected fake `HttpClient` handler — no network I/O in
+test runs.
+
 ## [0.1.0] - 2026-05-13
 
 ### Added

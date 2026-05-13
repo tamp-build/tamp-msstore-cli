@@ -29,17 +29,29 @@ Multi-targets net8 / net9 / net10. Requires `Tamp.Core` ≥ **1.5.1**. (1.5.1 or
 
 ## Tool installation
 
-Install `msstore-cli` on each CI runner — distribution channels:
+### Windows — auto-install via `MsStore.EnsureInstalled` (0.2.0+, recommended)
 
-- **Windows:** **direct GitHub release zip** — `msstore-cli` is *not* on winget (confirmed against `microsoft/msstore-cli` v0.3.9 — the upstream publishes only release archives, no winget manifest). The one-liner DasBook adoption used:
+```csharp
+readonly Tool MsStoreCli = Tool.Create(MsStore.EnsureInstalled());
+//  ↑ downloads msstore-cli 0.3.9 to %LOCALAPPDATA%\Programs\msstore-cli on first call.
+//    Idempotent — second invocation with same version is a no-op (marker file mechanic).
+//    Override: MsStore.EnsureInstalled(version: "0.4.0", installDir: someAbsolutePath)
+```
+
+This replaces the manual PowerShell snippet adopters used in 0.1.0 (still shown below for posterity / when running outside Tamp). The version this satellite is tested against (`0.3.9`) is the default; pass an explicit `version` to pin elsewhere.
+
+### Other distribution channels
+
+- **Windows (manual)** — `msstore-cli` is *not* on winget (confirmed against `microsoft/msstore-cli` v0.3.9 — the upstream publishes only release archives, no winget manifest). For non-Tamp use the snippet is:
   ```powershell
   $dest = "$env:LOCALAPPDATA\Programs\msstore-cli"
   Invoke-WebRequest "https://github.com/microsoft/msstore-cli/releases/download/v0.3.9/MSStoreCLI-win-x64.zip" -OutFile "$env:TEMP\msstore.zip"
   Expand-Archive "$env:TEMP\msstore.zip" -DestinationPath $dest
   [Environment]::SetEnvironmentVariable("PATH", "$([Environment]::GetEnvironmentVariable('PATH','User'));$dest", "User")
   ```
-- **macOS:** `brew install microsoft/msstore-cli/msstore-cli` or `.tar.gz` from [releases](https://github.com/microsoft/msstore-cli/releases)
-- **Linux:** `brew install microsoft/msstore-cli/msstore-cli` or `.tar.gz`
+  Inside a Tamp build script, prefer `MsStore.EnsureInstalled()` above.
+- **macOS:** `brew install microsoft/msstore-cli/msstore-cli` or `.tar.gz` from [releases](https://github.com/microsoft/msstore-cli/releases). Then `[FromPath("msstore")] readonly Tool MsStoreCli`. Tamp does not auto-install on macOS — brew already owns this use case (per the build-chain-vs-build-tool creed).
+- **Linux:** `brew install microsoft/msstore-cli/msstore-cli` or `.tar.gz`. Same Tamp-side handling as macOS — resolve via `[FromPath]` after brew-installing.
 
 > **Pin the version.** msstore-cli is officially labeled "(preview)" and the verb surface can shift between minor versions. Pin the GitHub release tag (`v0.3.9` shown above) on Windows; use `brew install msstore-cli@<x.y.z>` on macOS / Linux. CI runners should download a fixed release tag rather than `latest`. Tamp.MicrosoftStoreCli 0.1.0 is built against the msstore-cli `0.3.9` (January 2026) verb shape.
 
@@ -84,8 +96,17 @@ class Build : TampBuild
             .SetClientId(Environment.GetEnvironmentVariable("PARTNER_CENTER_CLIENT_ID"))
             .SetClientSecret(PartnerCenterClientSecret)));
 
+    // ⚠️ .Before(...) is LOAD-BEARING — see "Version-stamp ordering" note below.
     Target StampVersion => _ => _
-        .Executes(() => Msix.SetAppxManifestVersion(AppxManifest, Version));
+        .Before(nameof(BuildService), nameof(BuildDesktop))
+        .Description("[Pack] Stamp Version across every manifest the build will embed")
+        .Executes(() =>
+        {
+            Msix.SetAppxManifestVersion(AppxManifest, Version);
+            Cargo.SetPackageVersion(ServiceCrate / "Cargo.toml", Version);
+            Cargo.SetPackageVersion(SrcTauri    / "Cargo.toml", Version);
+            // (Add Npm.SetVersion(NpmBin, Version) once Tamp.Npm.V10 ships the typed verb.)
+        });
 
     Target BuildService => _ => _
         .Executes(() => Cargo.Build(CargoBin, s => s
@@ -138,6 +159,18 @@ class Build : TampBuild
 ```
 
 Run `dotnet tamp PublishToStore --version 1.0.6 --rolloutPercent 25` and the entire chain executes: cargo build → stage sidecar → tauri build → stage desktop exe → pack MSIX → configure auth → submit to Store. The browser tab never opens.
+
+### Version-stamp ordering — `.Before(...)` is load-bearing
+
+`StampVersion` must run **before** any target whose output embeds the version at compile time. For a Tauri shell, that's everything that compiles Rust: `BuildService` (the sidecar's `env!("CARGO_PKG_VERSION")` resolves at rustc time), `BuildDesktop` (`tauri build`'s inner cargo invocation does the same), and downstream packaging steps.
+
+Without `.Before(nameof(BuildService), nameof(BuildDesktop))` on the stamp target, Tamp's scheduler is free to order it after the build branch — producing a self-inconsistent MSIX where:
+- `AppxManifest.xml` says the **new** version (because `Msix.SetAppxManifestVersion` ran)
+- but the embedded `dasbook2.exe` still reports the **old** version internally (because the cargo build saw `Cargo.toml` pre-stamp)
+
+Users get an "update available" banner that never actually clears because the binary's self-reported version stays at the old number. The class of bug is silent unless someone strings-greps the produced binary.
+
+The `.Before(...)` constraint above gates the order at the build-graph level rather than relying on declaration order or topological luck. Verify the resolved order with `dotnet tamp PublishToStore --plan` — it prints the full execution sequence without running anything. **Always plan first when you change graph ordering.**
 
 ## Verb surface
 

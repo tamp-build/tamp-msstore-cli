@@ -24,6 +24,69 @@ namespace Tamp.MicrosoftStoreCli;
 /// </remarks>
 public static class MsStore
 {
+    // ── self-bootstrap (TAM-199) ─────────────────────────────────────────
+
+    /// <summary>
+    /// Ensure <c>msstore-cli</c> is installed at <paramref name="installDir"/>,
+    /// downloading + extracting the GitHub release zip if it isn't already
+    /// at <paramref name="version"/>. Returns the <see cref="AbsolutePath"/>
+    /// to <c>msstore.exe</c> — pipe that into <see cref="Tool.Create"/> to
+    /// wire it as the tool argument of <see cref="Publish"/>, <see cref="Reconfigure"/>,
+    /// etc.
+    /// </summary>
+    /// <param name="version">
+    /// The msstore-cli release tag to install (without the leading <c>v</c>).
+    /// Defaults to the version this satellite is tested against.
+    /// </param>
+    /// <param name="installDir">
+    /// Override for the install location. Defaults to
+    /// <c>%LOCALAPPDATA%\Programs\msstore-cli</c> per the upstream README convention.
+    /// </param>
+    /// <param name="httpClient">
+    /// Optional pre-configured client (e.g. for proxy / retry policies in CI).
+    /// A fresh <see cref="HttpClient"/> is used when null.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// Idempotent — if the marker file under <paramref name="installDir"/> matches
+    /// <paramref name="version"/> and the binary is present, returns immediately
+    /// without any I/O.
+    /// </para>
+    /// <para>
+    /// <b>Windows-only</b> at the runtime layer — msstore-cli does ship for
+    /// macOS / Linux but the recommended install path on those platforms is
+    /// <c>brew install microsoft/msstore-cli/msstore-cli</c>, which Tamp does
+    /// not displace (per the "build-chain manager, not a build tool" creed —
+    /// brew already owns this use case). On non-Windows, throw
+    /// <see cref="PlatformNotSupportedException"/>; adopters resolve via
+    /// <c>[FromPath("msstore")]</c> after brew-installing.
+    /// </para>
+    /// </remarks>
+    public static AbsolutePath EnsureInstalled(
+        string? version = null,
+        AbsolutePath? installDir = null,
+        System.Net.Http.HttpClient? httpClient = null)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException(
+                "MsStore.EnsureInstalled supports Windows only. On macOS / Linux use " +
+                "`brew install microsoft/msstore-cli/msstore-cli` and resolve via " +
+                "[FromPath(\"msstore\")].");
+
+        version ??= MsStoreInstaller.DefaultVersion;
+        installDir ??= MsStoreInstaller.DefaultWindowsInstallDir();
+        var ownsClient = httpClient is null;
+        httpClient ??= new System.Net.Http.HttpClient();
+        try
+        {
+            return MsStoreInstaller.Install(version, installDir, httpClient);
+        }
+        finally
+        {
+            if (ownsClient) httpClient.Dispose();
+        }
+    }
+
     // ── one-shot / config ────────────────────────────────────────────────
 
     /// <summary><c>msstore reconfigure</c> — supply Partner Center credentials. Run once per CI runner.</summary>
