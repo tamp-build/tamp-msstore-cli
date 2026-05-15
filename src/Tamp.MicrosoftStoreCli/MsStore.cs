@@ -119,6 +119,14 @@ public static class MsStore
     public static CommandPlan Package(Tool tool, Action<MsStorePackageSettings> configure)
         => Run<MsStorePackageSettings>(tool, configure);
 
+    // ---- Object-init overloads (TAM-161) for top-level verbs ----
+    public static CommandPlan Reconfigure(Tool tool, MsStoreReconfigureSettings settings) => Plan(tool, settings);
+    public static CommandPlan Info(Tool tool, MsStoreInfoSettings settings) => Plan(tool, settings);
+    public static CommandPlan SetPdn(Tool tool, MsStoreSetPdnSettings settings) => Plan(tool, settings);
+    public static CommandPlan Publish(Tool tool, MsStorePublishSettings settings) => Plan(tool, settings);
+    public static CommandPlan Init(Tool tool, MsStoreInitSettings settings) => Plan(tool, settings);
+    public static CommandPlan Package(Tool tool, MsStorePackageSettings settings) => Plan(tool, settings);
+
     // ── apps directory ─────────────────────────────────────────────────────
 
     /// <summary>Nested verbs under <c>msstore apps</c>.</summary>
@@ -129,6 +137,10 @@ public static class MsStore
 
         public static CommandPlan Get(Tool tool, Action<MsStoreAppsGetSettings> configure)
             => Run<MsStoreAppsGetSettings>(tool, configure);
+
+        // ---- Object-init overloads (TAM-161) ----
+        public static CommandPlan List(Tool tool, MsStoreAppsListSettings settings) => Plan(tool, settings);
+        public static CommandPlan Get(Tool tool, MsStoreAppsGetSettings settings) => Plan(tool, settings);
     }
 
     // ── submission lifecycle ────────────────────────────────────────────────
@@ -159,6 +171,16 @@ public static class MsStore
 
         public static CommandPlan Delete(Tool tool, Action<MsStoreSubmissionDeleteSettings> configure)
             => Run<MsStoreSubmissionDeleteSettings>(tool, configure);
+
+        // ---- Object-init overloads (TAM-161) ----
+        public static CommandPlan Status(Tool tool, MsStoreSubmissionStatusSettings settings) => Plan(tool, settings);
+        public static CommandPlan Get(Tool tool, MsStoreSubmissionGetSettings settings) => Plan(tool, settings);
+        public static CommandPlan GetListingAssets(Tool tool, MsStoreSubmissionGetListingAssetsSettings settings) => Plan(tool, settings);
+        public static CommandPlan UpdateMetadata(Tool tool, MsStoreSubmissionUpdateMetadataSettings settings) => Plan(tool, settings);
+        public static CommandPlan Update(Tool tool, MsStoreSubmissionUpdateSettings settings) => Plan(tool, settings);
+        public static CommandPlan Poll(Tool tool, MsStoreSubmissionPollSettings settings) => Plan(tool, settings);
+        public static CommandPlan Publish(Tool tool, MsStoreSubmissionPublishSettings settings) => Plan(tool, settings);
+        public static CommandPlan Delete(Tool tool, MsStoreSubmissionDeleteSettings settings) => Plan(tool, settings);
     }
 
     // ── flights (ring deploys) + flight submission lifecycle + rollout ──────
@@ -176,6 +198,12 @@ public static class MsStore
 
         public static CommandPlan Create(Tool tool, Action<MsStoreFlightsCreateSettings> configure)
             => Run<MsStoreFlightsCreateSettings>(tool, configure);
+
+        // ---- Object-init overloads (TAM-161) ----
+        public static CommandPlan List(Tool tool, MsStoreFlightsListSettings settings) => Plan(tool, settings);
+        public static CommandPlan Get(Tool tool, MsStoreFlightsGetSettings settings) => Plan(tool, settings);
+        public static CommandPlan Delete(Tool tool, MsStoreFlightsDeleteSettings settings) => Plan(tool, settings);
+        public static CommandPlan Create(Tool tool, MsStoreFlightsCreateSettings settings) => Plan(tool, settings);
 
         public static class Submission
         {
@@ -197,6 +225,14 @@ public static class MsStore
             public static CommandPlan Status(Tool tool, Action<MsStoreFlightSubmissionStatusSettings> configure)
                 => Run<MsStoreFlightSubmissionStatusSettings>(tool, configure);
 
+            // ---- Object-init overloads (TAM-161) ----
+            public static CommandPlan Get(Tool tool, MsStoreFlightSubmissionGetSettings settings) => Plan(tool, settings);
+            public static CommandPlan Delete(Tool tool, MsStoreFlightSubmissionDeleteSettings settings) => Plan(tool, settings);
+            public static CommandPlan Update(Tool tool, MsStoreFlightSubmissionUpdateSettings settings) => Plan(tool, settings);
+            public static CommandPlan Publish(Tool tool, MsStoreFlightSubmissionPublishSettings settings) => Plan(tool, settings);
+            public static CommandPlan Poll(Tool tool, MsStoreFlightSubmissionPollSettings settings) => Plan(tool, settings);
+            public static CommandPlan Status(Tool tool, MsStoreFlightSubmissionStatusSettings settings) => Plan(tool, settings);
+
             public static class Rollout
             {
                 public static CommandPlan Get(Tool tool, Action<MsStoreFlightRolloutGetSettings> configure)
@@ -210,6 +246,12 @@ public static class MsStore
 
                 public static CommandPlan Finalize(Tool tool, Action<MsStoreFlightRolloutFinalizeSettings> configure)
                     => Run<MsStoreFlightRolloutFinalizeSettings>(tool, configure);
+
+                // ---- Object-init overloads (TAM-161) ----
+                public static CommandPlan Get(Tool tool, MsStoreFlightRolloutGetSettings settings) => Plan(tool, settings);
+                public static CommandPlan Update(Tool tool, MsStoreFlightRolloutUpdateSettings settings) => Plan(tool, settings);
+                public static CommandPlan Halt(Tool tool, MsStoreFlightRolloutHaltSettings settings) => Plan(tool, settings);
+                public static CommandPlan Finalize(Tool tool, MsStoreFlightRolloutFinalizeSettings settings) => Plan(tool, settings);
             }
         }
     }
@@ -238,5 +280,15 @@ public static class MsStore
         var s = new T();
         configure?.Invoke(s);
         return s.ToCommandPlan(tool);
+    }
+
+    // Shared object-init plan-builder used by all of the nested facades above
+    // (Apps / Submission / Flights / Flights.Submission / Flights.Submission.Rollout).
+    // Nested static classes can call enclosing-class private members directly.
+    private static CommandPlan Plan<T>(Tool tool, T settings) where T : MsStoreSettingsBase
+    {
+        if (tool is null) throw new ArgumentNullException(nameof(tool));
+        if (settings is null) throw new ArgumentNullException(nameof(settings));
+        return settings.ToCommandPlan(tool);
     }
 }
