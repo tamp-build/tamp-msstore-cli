@@ -30,8 +30,8 @@ public static class MsStore
     /// Ensure <c>msstore-cli</c> is installed at <paramref name="installDir"/>,
     /// downloading + extracting the GitHub release zip if it isn't already
     /// at <paramref name="version"/>. Returns the <see cref="AbsolutePath"/>
-    /// to <c>msstore.exe</c> — pipe that into <see cref="Tool.Create"/> to
-    /// wire it as the tool argument of <see cref="Publish"/>, <see cref="Reconfigure"/>,
+    /// to <c>msstore.exe</c> — pipe that into <c>Tool.Create</c> to
+    /// wire it as the tool argument of <c>Publish</c>, <c>Reconfigure</c>,
     /// etc.
     /// </summary>
     /// <param name="version">
